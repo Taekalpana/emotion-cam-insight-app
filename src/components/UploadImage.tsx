@@ -1,8 +1,9 @@
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { UploadCloud } from 'lucide-react';
+import { UploadCloud, Camera as CameraIcon, RefreshCcw } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface UploadImageProps {
   onImageSelected: (imageData: string) => void;
@@ -10,6 +11,12 @@ interface UploadImageProps {
 
 const UploadImage: React.FC<UploadImageProps> = ({ onImageSelected }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  const [isUsingCamera, setIsUsingCamera] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -18,7 +25,9 @@ const UploadImage: React.FC<UploadImageProps> = ({ onImageSelected }) => {
     const reader = new FileReader();
     reader.onload = (event) => {
       if (event.target?.result) {
-        onImageSelected(event.target.result as string);
+        const imageData = event.target.result as string;
+        setCapturedImage(imageData);
+        onImageSelected(imageData);
       }
     };
     reader.readAsDataURL(file);
@@ -28,9 +37,72 @@ const UploadImage: React.FC<UploadImageProps> = ({ onImageSelected }) => {
     fileInputRef.current?.click();
   };
   
+  const startCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: false
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+        setStream(mediaStream);
+        setIsUsingCamera(true);
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      toast.error('Could not access camera. Please check permissions.');
+    }
+  };
+  
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+      setIsUsingCamera(false);
+    }
+  };
+  
+  const takePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      // Draw video frame to canvas
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Convert to data URL
+        const imageData = canvas.toDataURL('image/jpeg');
+        setCapturedImage(imageData);
+        onImageSelected(imageData);
+        stopCamera();
+      }
+    }
+  };
+  
+  const resetProcess = () => {
+    setCapturedImage(null);
+    stopCamera();
+  };
+  
+  // Clean up camera stream when component unmounts
+  React.useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [stream]);
+  
   return (
-    <Card className="border-dashed border-2 hover:border-primary transition-colors cursor-pointer bg-accent/50">
-      <CardContent className="p-6 flex flex-col items-center justify-center" onClick={triggerFileInput}>
+    <Card className={`border-dashed border-2 hover:border-primary transition-colors ${!isUsingCamera && !capturedImage ? 'cursor-pointer' : ''} bg-accent/50`}>
+      <CardContent className="p-6 flex flex-col items-center justify-center">
         <input
           type="file"
           ref={fileInputRef}
@@ -39,16 +111,72 @@ const UploadImage: React.FC<UploadImageProps> = ({ onImageSelected }) => {
           className="hidden"
         />
         
-        <UploadCloud className="h-10 w-10 text-primary/70 mb-3" />
+        <canvas ref={canvasRef} className="hidden" />
         
-        <div className="text-center space-y-2">
-          <h3 className="font-medium">Upload an image</h3>
-          <p className="text-sm text-muted-foreground">Click to browse or drag and drop</p>
-        </div>
+        {isUsingCamera && (
+          <div className="relative w-full">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full rounded-md"
+            />
+            <div className="mt-4 flex justify-center gap-2">
+              <Button onClick={takePhoto} className="flex items-center gap-2">
+                <CameraIcon size={18} />
+                Capture Photo
+              </Button>
+              <Button variant="outline" onClick={stopCamera} className="flex items-center gap-2">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
         
-        <Button variant="outline" className="mt-4">
-          Select image
-        </Button>
+        {capturedImage && (
+          <div className="w-full">
+            <img 
+              src={capturedImage} 
+              alt="Captured" 
+              className="w-full rounded-md mb-4"
+            />
+            <div className="flex justify-center gap-2">
+              <Button variant="outline" onClick={resetProcess} className="flex items-center gap-2">
+                <RefreshCcw size={18} />
+                Take New Photo
+              </Button>
+            </div>
+          </div>
+        )}
+        
+        {!isUsingCamera && !capturedImage && (
+          <div onClick={triggerFileInput} className="w-full flex flex-col items-center">
+            <UploadCloud className="h-10 w-10 text-primary/70 mb-3" />
+            
+            <div className="text-center space-y-2">
+              <h3 className="font-medium">Upload an image</h3>
+              <p className="text-sm text-muted-foreground">Click to browse or drag and drop</p>
+            </div>
+            
+            <div className="mt-4 flex gap-2">
+              <Button variant="outline" className="flex items-center gap-2">
+                Select image
+              </Button>
+              <Button 
+                variant="default" 
+                className="flex items-center gap-2" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startCamera();
+                }}
+              >
+                <CameraIcon size={18} />
+                Use Camera
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

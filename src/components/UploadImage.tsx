@@ -2,7 +2,7 @@
 import React, { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { UploadCloud, Camera as CameraIcon, RefreshCcw } from 'lucide-react';
+import { UploadCloud, Camera as CameraIcon, RefreshCcw, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface UploadImageProps {
@@ -122,12 +122,21 @@ const UploadImage: React.FC<UploadImageProps> = ({ onImageSelected }) => {
               muted
               className="w-full rounded-md"
             />
-            <div className="mt-4 flex justify-center gap-2">
-              <Button onClick={takePhoto} className="flex items-center gap-2">
-                <CameraIcon size={18} />
-                Capture Photo
-              </Button>
-              <Button variant="outline" onClick={stopCamera} className="flex items-center gap-2">
+            <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+              <div className="bg-black/50 rounded-full p-3">
+                <Button 
+                  onClick={takePhoto} 
+                  variant="default"
+                  size="icon"
+                  className="rounded-full h-12 w-12 flex items-center justify-center bg-white border-4 border-primary"
+                >
+                  <Check className="h-6 w-6 text-primary" />
+                </Button>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button variant="outline" onClick={stopCamera} size="sm" className="flex items-center gap-2">
+                <X size={18} />
                 Cancel
               </Button>
             </div>
